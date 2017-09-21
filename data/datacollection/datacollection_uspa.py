@@ -1,18 +1,21 @@
+""" This script pulls powerlifting csv data from remote server and parses it """
+
 import csv
 import io
 import re
 import urllib.request
 
 from bs4 import BeautifulSoup 
+from lift import Lift
 
 #url = 'http://uspa.net/uspa_national_records.html';
-#req = urllib.request.Request(url, headers={'User-Agent' : "Magic Browser"}) 
+#req = urllib.request.Request(url, headers={'User-Agent' : "Magic Browser"})
 #con = urllib.request.urlopen( req )
 #soup = BeautifulSoup(con, 'html.parser')
 
+""" Main entry point function """
 def main():
-    # 1) store google doc link for each record set
-    # TODO: if it turns out these links change often, add code to parse the links from the records page
+    # TODO: parse the links from the web page, and do it in a separate module
     junior_men_raw = "https://docs.google.com/spreadsheets/d/1ZYDAv0uU9TONzAu1KPNWZPh6_44fa_SvapqJv1qTPUk/pub?output=csv";
     subopen_men_raw = "https://docs.google.com/spreadsheets/d/1uaxcPZKgNDQPBV0xd3cNmM0860rM2uznq-U4JDPLqBE/pub?output=csv";
     master_men_raw = "https://docs.google.com/spreadsheets/d/1wzK4fxhAni4mX6L95AOtpYfpV6SoGHv7z1TeLsbbEss/pub?output=csv";
@@ -27,91 +30,123 @@ def main():
 
     # 2) Load each html document and parse each record
     # TODO: can replace url query string value for 'output' variable to be 'csv', which is probably easier to parse...
-    parseJuniorCsv(junior_men_raw, "RAW - Junior Men")
-    #parseFullPowerCsv("C:\\temp\\pl-data\\junior.csv", "RAW - Junior Men")
+    parse_junior_csv(junior_men_raw, "RAW - Junior Men")
+    #parse_fullpower_csv("C:\\temp\\pl-data\\junior.csv", "RAW - Junior Men")
     print("end")
 
-
-def parseJuniorCsv(url, name):
+""" Parses a csv file """
+def parse_junior_csv(url, name):
     try:
         print("parsing: {}".format(url))
         response = urllib.request.urlopen(url)
-        csvList = list(csv.reader(io.TextIOWrapper(response)))
-        
+        csv_list = list(csv.reader(io.TextIOWrapper(response)))
+
         # 1) loop thru rows and find "Junior Age 13-15 section"
-        startIdx1 = 0 # stores start index for "age 13-15" section
+        start_index1 = 0 # stores start index for "age 13-15" section
         found = False
-        while (startIdx1 < len(csvList)):
-            cell = csvList[startIdx1][0]
-            startIdx1 = startIdx1 + 1
+        while start_index1 < len(csv_list):
+            cell = csv_list[start_index1][0]
+            start_index1 = start_index1 + 1
             if ("13" in cell and "15" in cell):
                 found = True
                 break
         if (not found): raise ValueError("\"Junior Age 13-15 section header not found\"")
 
         # 2) loop thru rows and find "Junior Age 16-17 section"
-        startIdx2 = startIdx1 + 1 # stores start index for "age 16-17" section
+        start_index2 = start_index1 + 1 # stores start index for "age 16-17" section
         found = False
-        while(startIdx2 < len(csvList)):
-            cell = csvList[startIdx2][0]
-            startIdx2 = startIdx2 + 1
+        while(start_index2 < len(csv_list)):
+            cell = csv_list[start_index2][0]
+            start_index2 = start_index2 + 1
             if("16" in cell and "17" in cell):
                 found = True
                 break
         if (not found): raise ValueError("\"Junior Age 16-17 section header not found\"")
 
         # 3) loop thru rows and find "Junior Age 18-19 section"
-        startIdx3 = startIdx2 + 1 # starts start index for "age 18-19" section
+        start_index3 = start_index2 + 1 # starts start index for "age 18-19" section
         found = False
-        while(startIdx3 < len(csvList)):
-            cell = csvList[startIdx3][0]
-            startIdx3 = startIdx3 + 1
+        while(start_index3 < len(csv_list)):
+            cell = csv_list[start_index3][0]
+            start_index3 = start_index3 + 1
             if ("18" in cell and "19" in cell):
                 found = True
                 break
         if (not found): raise ValueError("\"Junior Age 18-19 section header not found\"")
 
         # 4) loop thru rows and find "Junior Age 20-23 section"
-        startIdx4 = startIdx3 + 1 # starts start index for "age 20-23" section
+        start_index4 = start_index3 + 1 # starts start index for "age 20-23" section
         found = False
-        while(startIdx4 < len(csvList)):
-            cell = csvList[startIdx4][0]
-            startIdx4 = startIdx4 + 1
+        while(start_index4 < len(csv_list)):
+            cell = csv_list[start_index4][0]
+            start_index4 = start_index4 + 1
             if ("20" in cell and "23" in cell):
                 found = True
                 break
         if (not found): raise ValueError("\"Junior Age 20-23 section header not found\"")
 
         # 5) with knowledge of the start,end of each section, parse each section, skipping column headers, and stopping before next section
-        parseFullPowerCsv(csvList, startIdx1+1, startIdx2-1)
+        parse_fullpower_csv(url, csv_list, start_index1 + 1, start_index2 - 1)
 
     except Exception as e:
         print("Error parsing \"{}\": {}".format(name, e))
 
-def parseFullPowerCsv(csvList, startIdx, endIdx):
+def parse_fullpower_csv(url, csv_list, start_index, endIdx):
     # column format: (Weight, <empty>, Lift, Kgs, Lbs, <empty>, Name, Date)
+    lift_col_index = 2
+    weight_col_index = 3
+    name_col_index = 6
+    date_col_index = 7
 
-    for i in range(startIdx, endIdx):
-        row = csvList[i]
-        weightText = str(row[0]).strip()
+    weight_class = None
+    for i in range(start_index, endIdx):
+        row = csv_list[i]
+        weight_class_text = str(row[0]).strip()
 
         # if we have reached the next weight class
-        if (weightText):
-            match = re.search(r"(\d*\.?\d+)kg", weightText)
+        if (weight_class_text):
+            match = re.search(r"(\d*\.?\d+)kg", weight_class_text)
             if (match):
-                weight = match.group(1)
-            elif ("SHW" in weightText):
-                weight = "SHW"
+                weight_class = match.group(1)
+            elif ("SHW" in weight_class_text):
+                weight_class = "SHW"
             else:
-                raise ValueError("Weight class not recognized from \"{}\"".format(weightText))
-        
+                raise ValueError("Weight class not recognized from \"{}\"".format(weight_class_text))
+
+        if (weight_class == None):
+            raise ValueError("Weight class could not be determined")
+        else:
+            lift_type = row[lift_col_index]
+
+            # if (string is null) or (string is empty)
+            if (lift_type == None) or (not lift_type.strip()):
+                # blank line, skip
+                continue
+
+            # Parse the lift
+            lift = Lift()
+            lift.weight_class = weight_class
+            lift.lift_type = row[lift_col_index]
+            lift.weight_lifted = row[weight_col_index]
+            lift.name = row[name_col_index]
+            lift.date = row[date_col_index]
+            lift.source = url
+            print(lift)
+
         # TODO: now we know the weight class. this line and the next 3 lines will contain a record (Squat|Bench|Deadlift|Total)
         # TODO: parse it
 
-def matchWeightClass(value):
-    weightClasses = [""]
+def parse_open_csv()
+    # TODO
+    raise NotImplementedError
 
+def parse_master_csv()
+    # TODO
+    raise NotImplementedError
 
+def parse_singlelift_csv()
+    # TODO
+    raise NotImplementedError
 
 # entry point
 main()
