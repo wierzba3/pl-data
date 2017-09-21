@@ -4,3 +4,7 @@ weight_class_enum (weight_class)						90kg, 100kg, 220kg, ...
 age_class_enum (age_class)							Sub Junior, Junior, Open, Sub Master, ...
 lift_type_enum (lift_type)							Squat, Bench, Deadlift, Total
 lift (lift_id, weight_class, lift_type, weight_lifted, lifter_name, date)
+
+
+values:
+weight_class_enum: 52,56,60,67.5,75,82.5,90,100,110,125,140,SHW
